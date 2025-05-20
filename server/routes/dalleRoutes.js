@@ -1,37 +1,38 @@
 import express from 'express';
+import axios from 'axios';
 import * as dotenv from 'dotenv';
-import { Configuration, OpenAIApi } from 'openai';
+import FormData from 'form-data';
 
 dotenv.config();
-
 const router = express.Router();
 
-const configuration = new Configuration({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+const STABILITY_API_KEY = process.env.OPENAI_API_KEY;
 
-const openai = new OpenAIApi(configuration);
+router.post('/', async (req, res) => {
+  const { prompt } = req.body;
 
-router.route('/').get((req, res) => {
-  res.status(200).json({ message: 'Hello from DALL-E!' });
-});
-
-router.route('/').post(async (req, res) => {
   try {
-    const { prompt } = req.body;
+    const form = new FormData();
+    form.append('prompt', prompt);
+    form.append('output_format', 'png');
+    form.append('mode', 'text-to-image');
 
-    const aiResponse = await openai.createImage({
-      prompt,
-      n: 1,
-      size: '1024x1024',
-      response_format: 'b64_json',
-    });
+    const response = await axios.post(
+      'https://api.stability.ai/v2beta/stable-image/generate/core',
+      form,
+      {
+        headers: {
+          ...form.getHeaders(),
+          Authorization: `Bearer ${STABILITY_API_KEY}`,
+        },
+      }
+    );
 
-    const image = aiResponse.data.data[0].b64_json;
-    res.status(200).json({ photo: image });
+    const imageBase64 = response.data.image;
+    res.status(200).json({ photo: imageBase64 });
   } catch (error) {
-    console.error(error);
-    res.status(500).send(error?.response.data.error.message || 'Something went wrong');
+    console.error('Error from Stability API:', error.response?.data || error.message);
+    res.status(500).send('Image generation failed');
   }
 });
 
